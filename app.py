@@ -1,69 +1,74 @@
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# Replace this with your Bot Token from BotFather
+# Telegram Bot Token
 BOT_TOKEN = "7600496017:AAGD6_VhsgFMbWhr89E2_SCUH87nZobgeT8"
+
+# Load Qwen Model and Tokenizer
+MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
+print("Loading the model...")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_NAME, 
+    torch_dtype="auto", 
+    device_map="auto"
+)
+print("Model loaded successfully!")
+
+# Helper function to generate response using Qwen
+def generate_llm_response(user_input):
+    messages = [
+        {"role": "system", "content": "You are Lolexai, created by lolex. You are a helpful assistant."},
+        {"role": "user", "content": user_input}
+    ]
+
+    # Prepare input using the chat template
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    
+    # Tokenize and send input to model
+    inputs = tokenizer([text], return_tensors="pt").to(model.device)
+    output_ids = model.generate(
+        **inputs, 
+        max_new_tokens=200, 
+        do_sample=True, 
+        temperature=0.7
+    )
+    response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    return response
 
 # Start Command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Hello, Welcome to the Bot! Use /help to see available commands."
-    )
+    await update.message.reply_text("Hello! I am your AI assistant powered by Qwen LLM. Send me any text, and I will respond!")
 
-# Help Command
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("""Available Commands:
-/youtube - To get the YouTube URL
-/linkedin - To get the LinkedIn profile URL
-/gmail - To get the Gmail URL
-/geeks - To get the GeeksforGeeks URL""")
+# Handle User Messages
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_input = update.message.text
+    await update.message.reply_text("🤖 Generating response... Please wait.")
 
-# Custom Command: YouTube Link
-async def youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("YouTube Link => https://www.youtube.com/")
-
-# Custom Command: LinkedIn Link
-async def linkedin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("LinkedIn URL => https://www.linkedin.com/")
-
-# Custom Command: Gmail Link
-async def gmail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Gmail Link => https://www.gmail.com/")
-
-# Custom Command: GeeksforGeeks Link
-async def geeks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("GeeksforGeeks URL => https://www.geeksforgeeks.org/")
+    # Generate response using LLM
+    response = generate_llm_response(user_input)
+    await update.message.reply_text(response)
 
 # Unknown Command Handler
-async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        f"Sorry, '{update.message.text}' is not a valid command. Use /help to see available commands."
-    )
+async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Sorry, I did not understand that command. Use /start to begin.")
 
-# Unknown Text Handler
-async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        f"Sorry, I can't understand you. You said: '{update.message.text}'"
-    )
-
+# Main Function
 def main():
-    # Create the Application and pass the bot token
+    print("Starting the bot...")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Add command handlers
+    # Add command and message handlers
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("youtube", youtube))
-    app.add_handler(CommandHandler("linkedin", linkedin))
-    app.add_handler(CommandHandler("gmail", gmail))
-    app.add_handler(CommandHandler("geeks", geeks))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
-    # Add message handlers for unknown commands and texts
-    app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
-
-    # Start the bot
-    print("Bot is running... Press Ctrl+C to stop.")
+    # Run the bot
+    print("Bot is running. Press Ctrl+C to stop.")
     app.run_polling()
 
 if __name__ == "__main__":
