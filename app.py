@@ -6,21 +6,26 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 # Telegram Bot Token
 BOT_TOKEN = "7600496017:AAGD6_VhsgFMbWhr89E2_SCUH87nZobgeT8"
 
+
+# Check for GPU availability and set device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
 # Load Qwen Model and Tokenizer
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
 print("Loading the model...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME, 
-    torch_dtype="auto", 
-    device_map="auto"
-)
+    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+    device_map=None  # Disable automatic device map
+).to(device)  # Move the model explicitly to the selected device
 print("Model loaded successfully!")
 
 # Helper function to generate response using Qwen
 def generate_llm_response(user_input):
     messages = [
-        {"role": "system", "content": "You are Lolexai, created by lolex. You are a helpful assistant."},
+        {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": user_input}
     ]
 
@@ -30,7 +35,7 @@ def generate_llm_response(user_input):
     )
     
     # Tokenize and send input to model
-    inputs = tokenizer([text], return_tensors="pt").to(model.device)
+    inputs = tokenizer([text], return_tensors="pt").to(device)
     output_ids = model.generate(
         **inputs, 
         max_new_tokens=200, 
